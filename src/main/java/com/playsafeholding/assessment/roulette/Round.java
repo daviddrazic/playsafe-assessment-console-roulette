@@ -5,6 +5,7 @@ import java.io.Console;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Random;
@@ -14,7 +15,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 import com.playsafeholding.assessment.roulette.model.Bet;
 import com.playsafeholding.assessment.roulette.model.Player;
@@ -26,6 +32,9 @@ import com.playsafeholding.assessment.roulette.model.Player;
  * @author daviddrazic
  *
  */
+@Configuration
+@EnableAsync
+@EnableScheduling
 public class Round {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Round.class);
@@ -35,16 +44,14 @@ public class Round {
 	private final String WIN = "WIN";
 	private final String LOSE = "LOSE";
 	private final BigDecimal loseAmount = new BigDecimal("0.0");
-	private Console console;
-
 
 	private ArrayList<Player> players;
 		
 	public Round() {
-		this.console = System.console();
 		this.players = createPlayersFromFile(playerDelimeter);
 	}
 	
+	@Async
 	@Scheduled(fixedRate = 30000)
 	public void endRound() {
 		int winningNumber = new Random().nextInt(37);
@@ -96,21 +103,21 @@ public class Round {
 	
 	private boolean validateNewBet(String[] currentBet) {
 		if (currentBet == null || currentBet.length != 3) {
-			console.printf("INVALID ENTRY");
+			System.out.printf("INVALID ENTRY");
 			return false;
 		}
 		
-		if (!(currentBet[1].toLowerCase().equals("ODD") 
-				|| currentBet[1].toLowerCase().equals("EVEN")
+		if (!(currentBet[1].toLowerCase().equals("odd") 
+				|| currentBet[1].toLowerCase().equals("even")
 				|| (StringUtils.isNumeric(currentBet[1])
 						&& Integer.parseInt(currentBet[1]) >= 1
 						&& Integer.parseInt(currentBet[1]) <= 36))) {
-			console.printf("INVALID BET");
+			System.out.printf("INVALID BET");
 			return false;
 		}
 		
 		if (!NumberUtils.isCreatable(currentBet[2])) {
-			console.printf("INVALID AMOUNT");
+			System.out.printf("INVALID AMOUNT");
 			return false;			
 		}
 		
@@ -131,12 +138,21 @@ public class Round {
 
 		Pattern pattern = Pattern.compile(betDelimeter);
 		String currentConsoleLine = "";
-		while ((currentConsoleLine = console.readLine(betPrompt)) != null) {
-			String[] currentBet = pattern.split(currentConsoleLine);
-			if (currentBet[0].toLowerCase().equals("end")) {
-				return;
+		BufferedReader reader =  new BufferedReader(new InputStreamReader(System.in)); 
+		System.out.printf(betPrompt);
+		try {
+			while ((currentConsoleLine = reader.readLine()) != null) {
+				String[] currentBet = pattern.split(currentConsoleLine);
+				if (currentBet[0].toLowerCase().equals("end")) {
+					return;
+				}
+				addBet(currentBet);
+				System.out.printf(betPrompt);
 			}
-			addBet(currentBet);
+		}catch(IOException ioe) {
+			LOGGER.error("EXCEPTION READING FROM CONSOLE");
+		}finally {
+			reader = null;
 		}
 	}
 
@@ -179,31 +195,31 @@ public class Round {
 	}
 	
 	private void printRoundBets(int winningNumber) {
-		console.printf("Number: {}", winningNumber);
-		console.printf("Player\t\tBet\tOutcome\tWinnings");
-		console.printf("---");
+		System.out.printf("Number: %d%n", winningNumber);
+		System.out.printf("Player\tBet\tOutcome\tWinnings%n");
+		System.out.printf("---%n");
 		for (Player player:players) {
 			for (Bet bet:player.getBets()) {
-					console.printf(
-							"{}\t\t{}\t{}\\t{}", 
+				System.out.printf(
+							"%s\t%s\t%s\\t%f%n", 
 							player.getName(), 
 							bet.getBet(), 
 							bet.getOutcome(),
-							bet.getWinnings()
+							bet.getWinnings().doubleValue()
 					);
 			}
 		}		
 	}
 	
 	private void printPlayerTotals() {
-		console.printf("Player\t\tTotal Win\tTotal Bet");
-		console.printf("---");
+		System.out.printf("Player\tTotal Win\tTotal Bet%n");
+		System.out.printf("---%n");
 		for (Player player:players) {
-			console.printf(
-				"{}\t\t{}\t{}", 
+			System.out.printf(
+				"%s\t%f\t%f%n", 
 				player.getName(), 
-				player.getTotalWin(), 
-				player.getTotalBet());
+				player.getTotalWin().doubleValue(), 
+				player.getTotalBet().doubleValue());
 		}
 	}
 }
